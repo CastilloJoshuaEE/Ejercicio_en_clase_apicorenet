@@ -1,0 +1,24 @@
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "Ecuador1_"
+    ports:
+      - "14333:1433"
+    networks:
+      - microserviciorockdeveloper_default
+
+  api:
+    image: apirockd:latest
+    depends_on:
+      - mssql
+    ports:
+      - "3700:80"
+    networks:
+      - microserviciorockdeveloper_default
+
+networks:
+  microserviciorockdeveloper_default:
+    driver: bridge

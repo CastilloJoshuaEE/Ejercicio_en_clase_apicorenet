@@ -6,10 +6,16 @@ using Microsoft.AspNetCore.Http;
 using System.Data;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
+using System.Security.Cryptography.X509Certificates;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace APIRockD.Controllers
 {
-    public class UsuarioController : Controller
+    [ApiController]
+    [Route("api/[controller]")]
+    public class UsuarioController : ControllerBase
     {
         private readonly IConfiguration _config;
         public UsuarioController(IConfiguration config)
@@ -33,6 +39,7 @@ namespace APIRockD.Controllers
             "transaccion": "VALIDAR_USUARIO"
         }
          */
+         
         public async Task<ActionResult> GetUsuario([FromBody] Usuario usuario)
         {
             try
@@ -95,6 +102,7 @@ namespace APIRockD.Controllers
           "transaccion": "ELIMINAR_USUARIO"
         }
          */
+         [Route("[action]")]
         [HttpPost]
         public async Task<ActionResult> PostUsuario([FromBody] Usuario usuario)
         {
@@ -134,9 +142,10 @@ namespace APIRockD.Controllers
             "transaccion": "VALIDAR_USUARIO"
         }
          */
-         
+        [Route("[action]")]
         [HttpPost]
-        public async Task<ActionResult> ValidarUsuario([FromBody] Usuario usuario)
+       
+        public async Task<ActionResult> ValidarAcceso([FromBody] Usuario usuario)
         {
             try
             {
@@ -197,9 +206,9 @@ namespace APIRockD.Controllers
           "transaccion": "ELIMINAR_USUARIO"
         }
          */
-        [Route("[action]")]
-
+         [Route("[action]")]
         [HttpPost]
+        [Authorize]
         public async Task<ActionResult> SetUsuario([FromBody] Usuario usuario)
         {
             try
@@ -229,5 +238,110 @@ namespace APIRockD.Controllers
                 return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
+        /* El método hace esto en el swagger:
+ 1. VALIDAR USUARIO (Login)
+
+{
+    "cedula": "0911222311",
+    "clave": "123456",
+    "transaccion": "VALIDAR_USUARIO"
+}
+ */
+        [Route("[action]")]
+        [HttpPost]
+        public async Task<ActionResult<Usuario>> GetUsuarioAccess([FromBody] Usuario usuario)
+        {
+            try
+            {
+                var cadenaConexion = _config.GetConnectionString("Conexion");
+
+
+                if (string.IsNullOrEmpty(cadenaConexion))
+                    return BadRequest("Cadena de conexión no configurada");
+
+                XDocument xmlParam = API.Shared.DBXmlMethods.GetXml(usuario);
+                DataSet dsResultado = await API.Shared.DBXmlMethods.EjecutaBase(
+                    "GetUsuario",
+                    cadenaConexion,
+                    "VALIDAR_USUARIO",
+                    xmlParam?.ToString() ?? "");
+                List<Usuario> listUsuario= new List<Usuario>();
+                if (dsResultado.Tables.Count > 0 && dsResultado.Tables[0].Rows.Count > 0)
+
+                {
+                    Usuario usuario1 = new Usuario();
+                    usuario1.Id=Convert.ToInt32(dsResultado.Tables[0].Rows[0]["id"]);
+                    usuario1.Cedula = dsResultado.Tables[0].Rows[0]["cedula"].ToString();
+                    
+
+
+                    return Ok(JsonConvert.SerializeObject(CrearToken(usuario1)));
+                }
+                else
+                {
+                    return Ok(JsonConvert.SerializeObject("Error credenciales"));
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno: {ex.Message}");
+            }
+        }
+        
+        //Sirve para la creación de un acceso según los datos de usuario que ingresa al sistema
+        private string CrearToken(Usuario usuario)
+        {
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
+                new Claim(ClaimTypes.Name, usuario.Cedula)
+            };
+            var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(_config.GetSection("AppSettings:Token").Value));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                SigningCredentials = creds,
+                Expires = DateTime.Now.AddDays(1),
+                Subject = new ClaimsIdentity(claims)
+            };
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            return tokenHandler.WriteToken(token);
+        }
+
+  [HttpGet("test-db")]
+        public async Task<IActionResult> TestDatabase()
+        {
+            try
+            {
+                var cadenaConexion = _config.GetConnectionString("Conexion");
+                if (string.IsNullOrEmpty(cadenaConexion))
+                    return BadRequest("Cadena de conexión no configurada");
+
+                // Ejecutamos un procedimiento simple que siempre funciona, como "CONSULTAR_USUARIO"
+                DataSet ds = await API.Shared.DBXmlMethods.EjecutaBase(
+                    "GetUsuario",
+                    cadenaConexion,
+                    "CONSULTAR_USUARIO",
+                    null
+                );
+
+                if (ds.Tables.Count > 0)
+                {
+                    return Ok("Conexión a SQL Server OK!");
+                }
+                else
+                {
+                    return StatusCode(500, "Conexión establecida pero no se pudo consultar la tabla.");
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Error de conexión: " + ex.Message);
+            }
+        }
+
+
     }
+    
 }

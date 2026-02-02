@@ -1,4 +1,5 @@
 ﻿using BDRockDeveloper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using System.Data;
@@ -6,8 +7,9 @@ using System.Xml.Linq;
 
 namespace APIRockD.Controllers
 {
-
-    public class ProductoController : Controller
+    [ApiController]
+    [Route("api/[controller]")]
+    public class ProductoController : ControllerBase
     {
         private readonly IConfiguration _config;
         public ProductoController(IConfiguration config)
@@ -28,6 +30,7 @@ namespace APIRockD.Controllers
         }
          */
         [Route("[action]")]
+        [Authorize]
         [HttpPost]
         public async Task<ActionResult> GetProducto([FromBody] Producto producto)
         {
